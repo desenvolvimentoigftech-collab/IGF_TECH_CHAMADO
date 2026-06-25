@@ -258,15 +258,6 @@ function fileToPayload(file) {
   });
 }
 
-$("#setupBtn").addEventListener("click", async () => {
-  try {
-    const result = await api("setup", { setupKey: $("#setupKey").value });
-    $("#loginError").textContent = `Setup concluido. Planilha: ${result.spreadsheetUrl || "configurada"}`;
-  } catch (error) {
-    $("#loginError").textContent = error.message;
-  }
-});
-
 $("#loginForm").addEventListener("submit", async (event) => {
   event.preventDefault();
   $("#loginError").textContent = "";

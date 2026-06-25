@@ -7,6 +7,5 @@
    - `SPREADSHEET_ID`: ID da planilha, ou deixe vazio se o script estiver vinculado a ela.
    - `SETUP_KEY`: troque por uma chave forte.
    - `EVIDENCE_FOLDER_ID`: opcional; se vazio, o setup cria uma pasta no Drive.
-5. Execute `setupManual` uma vez no editor, ou use a acao `setup` pelo frontend.
+5. Execute `setupManual` uma vez no editor.
 6. Publique como Web App.
-

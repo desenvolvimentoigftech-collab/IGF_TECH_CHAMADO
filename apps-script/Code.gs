@@ -3,7 +3,7 @@ const CONFIG = {
   EVIDENCE_FOLDER_ID: '',
   SETUP_KEY: 'troque-esta-chave',
   INITIAL_ADMIN_EMAIL: 'admin@sistema.local',
-  INITIAL_ADMIN_PASSWORD: 'admin123',
+  INITIAL_ADMIN_PASSWORD: 'IGF@Chamados#2026',
   SESSION_SECONDS: 21600
 };
 

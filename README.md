@@ -14,7 +14,7 @@ Esta versao roda com:
 3. Crie uma planilha Google para os dados.
 4. No Apps Script, cole o conteudo de `../apps-script/Code.gs`.
 5. Ajuste `CONFIG` no Apps Script.
-6. Rode a funcao `setup` pelo editor ou pela tela inicial usando a chave definida.
+6. Rode a funcao `setupManual` pelo editor do Apps Script.
 7. Publique como Web App:
    - Execute as: Me
    - Who has access: Anyone with the link

@@ -16,14 +16,9 @@
       </div>
       <form id="loginForm" class="form-grid">
         <label>URL do Web App Apps Script<input id="apiUrl" name="apiUrl" placeholder="https://script.google.com/macros/s/.../exec" required></label>
-        <label>Email<input name="email" type="email" value="admin@sistema.local" required></label>
-        <label>Senha<input name="password" type="password" value="admin123" required></label>
+        <label>Email<input name="email" type="email" autocomplete="username" required></label>
+        <label>Senha<input name="password" type="password" autocomplete="current-password" required></label>
         <button class="primary" type="submit">Entrar</button>
-        <details>
-          <summary>Primeira configuracao</summary>
-          <label>Chave de setup<input id="setupKey" placeholder="chave definida no Apps Script"></label>
-          <button id="setupBtn" class="secondary" type="button">Criar estrutura inicial</button>
-        </details>
         <p id="loginError" class="error"></p>
       </form>
     </section>
