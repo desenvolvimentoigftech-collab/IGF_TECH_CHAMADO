@@ -8,7 +8,9 @@ const labels = {
   admin: "Administrador", gestor: "Gestor", tecnico: "Tecnico", solicitante: "Solicitante"
 };
 
-let apiUrl = localStorage.getItem("chamadosApiUrl") || "";
+const DEFAULT_API_URL = "https://script.google.com/macros/s/AKfycbzR7Ofl7zp4TTmsqh8xiLmNSAA1AxUp6x4pMWrk6pBZvc2ZMsiu8rLFlNh2wPhxFxt4/exec";
+
+let apiUrl = localStorage.getItem("chamadosApiUrl") || DEFAULT_API_URL;
 let token = localStorage.getItem("chamadosToken") || "";
 let currentUser = null;
 let users = [];
