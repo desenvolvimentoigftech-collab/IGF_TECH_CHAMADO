@@ -8,7 +8,7 @@ const labels = {
   admin: "Administrador", gestor: "Gestor", tecnico: "Tecnico", solicitante: "Solicitante"
 };
 
-const DEFAULT_API_URL = "https://script.google.com/macros/s/AKfycbzR7Ofl7zp4TTmsqh8xiLmNSAA1AxUp6x4pMWrk6pBZvc2ZMsiu8rLFlNh2wPhxFxt4/exec";
+const DEFAULT_API_URL = atob("aHR0cHM6Ly9zY3JpcHQuZ29vZ2xlLmNvbS9tYWNyb3Mvcy9BS2Z5Y2J6UjdPZmw3enA0VFRtc3FoOHhpTG1OU0FBMUF4VXA2eDRwTVdyazZwQlp2YzJaTXNpdThyTEZsTmgyd1BoeEZ4dDQvZXhlYw==");
 
 let apiUrl = DEFAULT_API_URL;
 let token = localStorage.getItem("chamadosToken") || "";
@@ -25,7 +25,7 @@ $("#apiUrl").value = DEFAULT_API_URL;
 
 async function api(action, data = {}) {
   apiUrl = DEFAULT_API_URL;
-  if (!apiUrl) throw new Error("Informe a URL do Web App Apps Script.");
+  if (!apiUrl) throw new Error("Servico indisponivel. Contate o administrador.");
   const response = await fetch(apiUrl, {
     method: "POST",
     headers: { "Content-Type": "text/plain;charset=utf-8" },

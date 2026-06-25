@@ -1,32 +1,22 @@
-# Sistema de Chamados - GitHub Pages + Apps Script
+# Sistema de Chamados IGF Tech
 
-Esta versao roda com:
+Interface web para abertura, atendimento e rastreabilidade de chamados tecnicos.
 
-- Frontend estatico no GitHub Pages.
-- Backend em Google Apps Script Web App.
-- Dados em Google Sheets.
-- Evidencias/fotos no Google Drive, gravando na planilha apenas o link.
+## Recursos
 
-## Publicacao
+- Login por perfil de usuario.
+- Separacao por empresa.
+- Cadastro de empresas, usuarios, falhas e locais.
+- Abertura de chamados com numero de serie, falha, local, descricao e evidencias.
+- Atendimento com status, responsavel, comentarios e historico.
+- Status paliativo com motivo, plano de conclusao e prazo obrigatorios.
+- Painel com indicadores, Pareto de falhas e ocorrencias por periodo.
 
-1. Suba os arquivos desta pasta para um repositorio GitHub.
-2. Ative GitHub Pages apontando para a branch/pasta publicada.
-3. Crie uma planilha Google para os dados.
-4. No Apps Script, cole o conteudo de `../apps-script/Code.gs`.
-5. Ajuste `CONFIG` no Apps Script.
-6. Rode a funcao `setupManual` pelo editor do Apps Script.
-7. Publique como Web App:
-   - Execute as: Me
-   - Who has access: Anyone with the link
-8. Abra o GitHub Pages e informe a URL do Web App.
+## Operacao
 
-## Migração futura
+A estrutura de dados deve ser preparada pelo administrador tecnico antes do primeiro uso.
+Depois disso, os usuarios acessam apenas a tela de login e os modulos permitidos pelo perfil.
 
-Os dados usam IDs UUID, timestamps ISO e abas normalizadas para facilitar exportacao para MySQL/PostgreSQL.
-O backend tambem possui a acao administrativa `exportAll`, que retorna JSON com todas as abas.
+## Migracao futura
 
-## Limites práticos desta versao
-
-- Cada foto enviada pelo frontend fica limitada a 4 MB para evitar estouro de payload do Apps Script.
-- Para volume alto de usuarios simultaneos, migrar para VPS/PHP+MySQL ou outro backend dedicado.
-- Para 50 equipamentos e uso moderado, Sheets + Drive deve atender como fase inicial.
+Os registros usam identificadores estaveis e datas em formato padronizado para facilitar exportacao e migracao futura.
