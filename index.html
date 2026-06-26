@@ -115,7 +115,7 @@
           <label class="admin-only">Empresa<select id="ticketCompanySelect" name="companyId"></select></label>
           <label>Tipo<select name="type" required><option value="falha">Falha</option><option value="intervencao">Intervencao</option><option value="instalacao">Instalacao</option><option value="remocao">Remocao</option></select></label>
           <label>Falha<select id="ticketFailureSelect" name="failureTypeId"></select></label>
-          <label>Outra falha<input id="ticketFailureOther" name="failureOther" maxlength="120"></label>
+          <label id="ticketFailureOtherField" class="hidden">Outra falha<input id="ticketFailureOther" name="failureOther" maxlength="120"></label>
           <label>Local<select id="ticketLocationSelect" name="locationId" required></select></label>
           <label>Prioridade<select name="priority" required><option value="baixa">Baixa</option><option value="media" selected>Media</option><option value="alta">Alta</option><option value="critica">Critica</option></select></label>
           <label class="wide">Titulo<input name="title" required maxlength="120"></label>

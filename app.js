@@ -44,6 +44,35 @@ function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[char]));
 }
 
+function setFormBusy(form, busy, label) {
+  const button = form.querySelector("button[type='submit']");
+  if (!button) return;
+  if (busy) {
+    button.dataset.originalText = button.textContent;
+    button.textContent = label;
+    button.disabled = true;
+    form.classList.add("is-busy");
+  } else {
+    button.textContent = button.dataset.originalText || button.textContent;
+    button.disabled = false;
+    form.classList.remove("is-busy");
+  }
+}
+
+function setMessage(selector, message, isError = false) {
+  const element = $(selector);
+  element.textContent = message;
+  element.classList.toggle("error", isError);
+  element.classList.toggle("success", !isError);
+}
+
+function syncFailureOtherVisibility() {
+  const isOther = !$("#ticketFailureSelect").value;
+  $("#ticketFailureOtherField").classList.toggle("hidden", !isOther);
+  $("#ticketFailureOther").required = isOther;
+  if (!isOther) $("#ticketFailureOther").value = "";
+}
+
 function showView(id) {
   $$(".view").forEach((view) => view.classList.toggle("hidden", view.id !== id));
   $$(".nav").forEach((button) => button.classList.toggle("active", button.dataset.view === id));
@@ -192,16 +221,30 @@ function manageHtml(ticket) {
 
 async function submitManage(event) {
   event.preventDefault();
-  await api("updateTicket", { id: selectedTicketId, ...Object.fromEntries(new FormData(event.target).entries()) });
-  await openTicket(selectedTicketId);
-  await loadTickets();
-  await loadDashboard();
+  setFormBusy(event.target, true, "Atualizando...");
+  try {
+    await api("updateTicket", { id: selectedTicketId, ...Object.fromEntries(new FormData(event.target).entries()) });
+    await openTicket(selectedTicketId);
+    await loadTickets();
+    await loadDashboard();
+  } catch (error) {
+    alert(error.message);
+  } finally {
+    setFormBusy(event.target, false);
+  }
 }
 
 async function submitComment(event) {
   event.preventDefault();
-  await api("addComment", { ticketId: selectedTicketId, body: new FormData(event.target).get("body") });
-  await openTicket(selectedTicketId);
+  setFormBusy(event.target, true, "Comentando...");
+  try {
+    await api("addComment", { ticketId: selectedTicketId, body: new FormData(event.target).get("body") });
+    await openTicket(selectedTicketId);
+  } catch (error) {
+    alert(error.message);
+  } finally {
+    setFormBusy(event.target, false);
+  }
 }
 
 async function loadCompanies() {
@@ -221,6 +264,7 @@ async function loadFailureTypes() {
   const data = await api("listFailureTypes");
   failureTypes = data.failureTypes;
   $("#ticketFailureSelect").innerHTML = `<option value="">Outros</option>` + failureTypes.map((f) => `<option value="${f.id}">${escapeHtml(f.name)}</option>`).join("");
+  syncFailureOtherVisibility();
   const list = $("#failureTypeList");
   if (list) list.innerHTML = failureTypes.map((f) => `<article class="user-card"><strong>${escapeHtml(f.name)}</strong><div class="ticket-meta"><span>${escapeHtml(f.description || "-")}</span></div></article>`).join("");
 }
@@ -262,11 +306,14 @@ function fileToPayload(file) {
 $("#loginForm").addEventListener("submit", async (event) => {
   event.preventDefault();
   $("#loginError").textContent = "";
+  setFormBusy(event.target, true, "Validando credenciais...");
   try {
     const data = await api("login", Object.fromEntries(new FormData(event.target).entries()));
     await afterLogin(data.user, data.token);
   } catch (error) {
     $("#loginError").textContent = error.message;
+  } finally {
+    setFormBusy(event.target, false);
   }
 });
 
@@ -284,10 +331,12 @@ $("#closeDialog").addEventListener("click", () => $("#ticketDialog").close());
 ["dashboardKind", "reportStart", "reportEnd", "reportBucket"].forEach((id) => $(`#${id}`).addEventListener("input", loadDashboardChart));
 $("#ticketCompanySelect").addEventListener("change", loadLocations);
 $("#locationCompanySelect").addEventListener("change", loadLocations);
+$("#ticketFailureSelect").addEventListener("change", syncFailureOtherVisibility);
 
 $("#ticketForm").addEventListener("submit", async (event) => {
   event.preventDefault();
-  $("#ticketFormMessage").textContent = "Enviando...";
+  setMessage("#ticketFormMessage", "Cadastrando chamado...");
+  setFormBusy(event.target, true, "Cadastrando chamado...");
   try {
     const form = new FormData(event.target);
     const photos = await Promise.all([...form.getAll("photos")].filter((file) => file.size).map(fileToPayload));
@@ -295,35 +344,62 @@ $("#ticketForm").addEventListener("submit", async (event) => {
     delete fields.photos;
     const data = await api("createTicket", { ticket: fields, photos });
     event.target.reset();
-    $("#ticketFormMessage").textContent = `Chamado ${data.protocol} registrado.`;
+    syncFailureOtherVisibility();
+    setMessage("#ticketFormMessage", `Chamado ${data.protocol} registrado.`);
     if (currentUser.role !== "solicitante") await loadDashboard();
   } catch (error) {
-    $("#ticketFormMessage").textContent = error.message;
+    setMessage("#ticketFormMessage", error.message, true);
+  } finally {
+    setFormBusy(event.target, false);
   }
 });
 
 $("#companyForm").addEventListener("submit", async (event) => {
   event.preventDefault();
-  await api("createCompany", Object.fromEntries(new FormData(event.target).entries()));
-  event.target.reset();
-  $("#companyFormMessage").textContent = "Empresa criada.";
-  await loadCompanies();
+  setMessage("#companyFormMessage", "Criando empresa...");
+  setFormBusy(event.target, true, "Criando empresa...");
+  try {
+    await api("createCompany", Object.fromEntries(new FormData(event.target).entries()));
+    event.target.reset();
+    setMessage("#companyFormMessage", "Empresa criada.");
+    await loadCompanies();
+  } catch (error) {
+    setMessage("#companyFormMessage", error.message, true);
+  } finally {
+    setFormBusy(event.target, false);
+  }
 });
 
 $("#failureTypeForm").addEventListener("submit", async (event) => {
   event.preventDefault();
-  await api("createFailureType", Object.fromEntries(new FormData(event.target).entries()));
-  event.target.reset();
-  $("#failureTypeFormMessage").textContent = "Falha criada.";
-  await loadFailureTypes();
+  setMessage("#failureTypeFormMessage", "Criando falha...");
+  setFormBusy(event.target, true, "Criando falha...");
+  try {
+    await api("createFailureType", Object.fromEntries(new FormData(event.target).entries()));
+    event.target.reset();
+    setMessage("#failureTypeFormMessage", "Falha criada.");
+    await loadFailureTypes();
+  } catch (error) {
+    setMessage("#failureTypeFormMessage", error.message, true);
+  } finally {
+    setFormBusy(event.target, false);
+  }
 });
 
 $("#locationForm").addEventListener("submit", async (event) => {
   event.preventDefault();
-  await api("createLocation", Object.fromEntries(new FormData(event.target).entries()));
-  event.target.reset();
-  $("#locationFormMessage").textContent = "Local criado.";
-  await loadLocations();
+  setMessage("#locationFormMessage", "Criando novo local...");
+  setFormBusy(event.target, true, "Criando local...");
+  try {
+    await api("createLocation", Object.fromEntries(new FormData(event.target).entries()));
+    event.target.reset();
+    setMessage("#locationFormMessage", "Local criado.");
+    await loadLocations();
+  } catch (error) {
+    setMessage("#locationFormMessage", error.message, true);
+  } finally {
+    setFormBusy(event.target, false);
+  }
 });
 
 $("#userForm [name='role']").addEventListener("change", (event) => {
@@ -334,8 +410,16 @@ $("#userForm [name='role']").addEventListener("change", (event) => {
 
 $("#userForm").addEventListener("submit", async (event) => {
   event.preventDefault();
-  await api("createUser", Object.fromEntries(new FormData(event.target).entries()));
-  event.target.reset();
-  $("#userFormMessage").textContent = "Usuario criado.";
-  await loadUsers();
+  setMessage("#userFormMessage", "Criando usuario...");
+  setFormBusy(event.target, true, "Criando usuario...");
+  try {
+    await api("createUser", Object.fromEntries(new FormData(event.target).entries()));
+    event.target.reset();
+    setMessage("#userFormMessage", "Usuario criado.");
+    await loadUsers();
+  } catch (error) {
+    setMessage("#userFormMessage", error.message, true);
+  } finally {
+    setFormBusy(event.target, false);
+  }
 });
