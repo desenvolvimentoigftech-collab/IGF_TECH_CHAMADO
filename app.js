@@ -165,8 +165,14 @@ function renderLineChart(items) {
 }
 
 async function loadTickets() {
-  const data = await api("listTicketQueue", { q: $("#searchInput").value.trim(), status: $("#statusFilter").value, type: $("#typeFilter").value });
-  $("#ticketList").innerHTML = data.tickets.map(ticketCard).join("") || "<p class='muted'>Nenhum chamado encontrado.</p>";
+  const list = $("#ticketList");
+  list.innerHTML = "<p class='muted'>Carregando chamados existentes...</p>";
+  try {
+    const data = await api("listTicketQueue", { q: $("#searchInput").value.trim(), status: $("#statusFilter").value, type: $("#typeFilter").value });
+    list.innerHTML = data.tickets.map(ticketCard).join("") || "<p class='muted'>Nenhum chamado cadastrado.</p>";
+  } catch (error) {
+    list.innerHTML = `<p class="error">${escapeHtml(error.message)}</p>`;
+  }
 }
 
 function ticketCard(ticket) {
