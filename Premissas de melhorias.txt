@@ -1,0 +1,86 @@
+Premissas de melhorias
+
+1. A tela de chamados deve ser mais limpa e objetiva, mostrando somente as informacoes necessarias para a decisao do momento.
+
+2. Quando um chamado estiver com status "Aberto", a visualizacao deve exibir apenas:
+   - Descricao do problema
+   - Nivel de prioridade
+   - Quem abriu o chamado
+   - Equipamento
+   - Botao "Atender chamado"
+
+3. Campos de atendimento, detalhes tecnicos, plano e prazo nao devem aparecer na visualizacao inicial de um chamado aberto.
+
+4. Ao clicar em "Atender chamado", o chamado deve ser vinculado ao usuario que clicou e mudar para "Em atendimento".
+
+5. Depois de atender o chamado, o usuario deve ser levado para uma tela/pagina de atendimento dedicada.
+
+6. A tela/pagina de atendimento deve permitir adicionar informacoes do atendimento, como detalhes tecnicos, plano, prazo e demais campos necessarios.
+
+7. A tela principal de chamados deve funcionar como uma fila operacional simples, e nao como uma tela completa de edicao.
+
+8. O historico deve usar nomes amigaveis para eventos, evitando termos tecnicos como "updated" e "claimed".
+
+9. Quando o chamado estiver "Em atendimento", o card deve exibir uma acao simples para alterar o status, sem mostrar todos os campos tecnicos diretamente na fila.
+
+10. Ao alterar o status de um chamado em atendimento, as opcoes devem ser:
+   - Solucionado
+   - Solucionado de forma paliativa
+
+11. A opcao de paliativo deve ser apresentada como "Solucionado de forma paliativa", e nao apenas "Paliativo" ou "Marcar como Paliativo".
+
+12. Ao escolher "Solucionado de forma paliativa", o sistema deve abrir uma tela/formulario especifico exigindo:
+   - Descricao da solucao paliativa
+   - Prazo
+   - Caixa de selecao com opcoes/motivos predefinidos
+
+13. O formulario de solucao paliativa deve mostrar apenas os campos relacionados a esse tipo de solucao, evitando campos que pertencem a outros status.
+
+14. Quando o chamado ja estiver com status "Paliativo", o card ainda deve exibir a acao "Alterar status" para permitir finalizar o chamado como "Solucionado".
+
+15. O status "Paliativo" deve representar uma solucao temporaria com prazo e plano definidos, nao o encerramento definitivo do chamado.
+
+16. A tela principal de chamados deve usar uma requisicao leve de fila, trazendo somente os dados necessarios para montar os cards.
+
+17. Os detalhes completos do chamado devem ficar separados da fila para evitar requisicoes longas e deixar o site mais rapido.
+
+18. A fila de chamados nao deve carregar inicialmente:
+   - Historico completo
+   - Comentarios
+   - Fotos/evidencias
+   - Formularios tecnicos
+   - Campos especificos de encerramento ou paliativo
+
+19. A fila deve carregar apenas informacoes resumidas, como:
+   - Protocolo
+   - Titulo ou descricao curta
+   - Status
+   - Prioridade
+   - Solicitante
+   - Empresa/local
+   - Equipamento ou numero de serie
+   - Data de abertura
+   - Responsavel, quando houver
+   - Contador de evidencias, quando necessario
+
+20. A tela/pagina de detalhes ou atendimento deve ser carregada sob demanda, somente quando o usuario abrir ou continuar o atendimento de um chamado.
+
+21. A tela/pagina de detalhes pode carregar informacoes completas, como:
+   - Descricao completa
+   - Evidencias/fotos
+   - Comentarios
+   - Historico
+   - Dados tecnicos
+   - Formularios de atendimento
+   - Plano, prazo e campos de solucao paliativa
+   - Campos de solucao definitiva
+
+22. O backend deve ter endpoints separados para fila e detalhes, por exemplo:
+   - listTicketQueue para a fila rapida
+   - getTicketDetail para os detalhes completos
+
+23. A fila deve evitar leituras repetidas e carregamentos desnecessarios no Apps Script. Sempre que possivel, o backend deve carregar as abas necessarias uma unica vez por requisicao e montar mapas em memoria.
+
+24. Fotos/evidencias devem aparecer na fila apenas como contador ou indicativo simples. As imagens e links completos devem ser carregados somente na tela de detalhes.
+
+25. O dashboard deve ser carregado apenas quando o usuario abrir o painel, e nao junto com a fila de chamados.

@@ -57,7 +57,9 @@ function route(body) {
     case 'listUsers': return { users: listUsers(user) };
     case 'createUser': return createUser(user, body);
     case 'createTicket': return createTicket(user, body.ticket || {}, body.photos || []);
+    case 'listTicketQueue': return { tickets: listTicketQueue(user, body) };
     case 'listTickets': return { tickets: listTickets(user, body) };
+    case 'getTicketDetail': return getTicketDetail(user, body.id);
     case 'getTicket': return getTicket(user, body.id);
     case 'claimTicket': return claimTicket(user, body.id);
     case 'updateTicket': return updateTicket(user, body);
@@ -308,6 +310,47 @@ function scopedTickets(user) {
   return rows('tickets').filter((t) => user.role === 'admin' || t.companyId === user.companyId);
 }
 
+function scopedTicketRows(user, ticketRows) {
+  if (user.role === 'solicitante') return ticketRows.filter((t) => t.requesterId === user.id);
+  return ticketRows.filter((t) => user.role === 'admin' || t.companyId === user.companyId);
+}
+
+function mapById(items) {
+  return items.reduce((acc, item) => {
+    acc[item.id] = item;
+    return acc;
+  }, {});
+}
+
+function countAttachmentsByTicket(attachments) {
+  return attachments.reduce((acc, item) => {
+    acc[item.ticketId] = (acc[item.ticketId] || 0) + 1;
+    return acc;
+  }, {});
+}
+
+function ticketContext(includeAttachments) {
+  return {
+    companies: mapById(rows('companies')),
+    failures: mapById(rows('failure_types')),
+    locations: mapById(rows('locations')),
+    users: mapById(rows('users')),
+    attachmentCounts: includeAttachments ? countAttachmentsByTicket(rows('attachments')) : {}
+  };
+}
+
+function enrichTicketWithContext(t, ctx) {
+  return {
+    ...t,
+    companyName: (ctx.companies[t.companyId] || {}).name || '',
+    failureTypeName: (ctx.failures[t.failureTypeId] || {}).name || '',
+    locationName: (ctx.locations[t.locationId] || {}).name || '',
+    requesterName: (ctx.users[t.requesterId] || {}).name || '',
+    assigneeName: (ctx.users[t.assigneeId] || {}).name || '',
+    attachmentCount: ctx.attachmentCounts[t.id] || 0
+  };
+}
+
 function enrichTicket(t) {
   const companies = rows('companies'), failures = rows('failure_types'), locs = rows('locations'), us = rows('users'), at = rows('attachments');
   return {
@@ -321,8 +364,31 @@ function enrichTicket(t) {
   };
 }
 
+function listTicketQueue(user, body) {
+  let list = scopedTicketRows(user, rows('tickets'));
+  if (body.status) list = list.filter((t) => t.status === body.status);
+  if (body.type) list = list.filter((t) => t.type === body.type);
+  const ctx = ticketContext(true);
+  list = list.map((t) => enrichTicketWithContext(t, ctx));
+  if (body.q) {
+    const q = String(body.q).toLowerCase();
+    list = list.filter((t) => [t.protocol,t.title,t.description,t.serialNumber,t.equipmentName,t.locationName,t.companyName,t.requesterName,t.assigneeName].join(' ').toLowerCase().includes(q));
+  }
+  return list
+    .sort((a,b) => String(b.updatedAt).localeCompare(String(a.updatedAt)))
+    .slice(0, 100)
+    .map((t) => ({
+      id: t.id, protocol: t.protocol, type: t.type, title: t.title, description: t.description,
+      priority: t.priority, status: t.status, companyName: t.companyName, locationName: t.locationName,
+      serialNumber: t.serialNumber, equipmentName: t.equipmentName, requesterName: t.requesterName,
+      assigneeId: t.assigneeId, assigneeName: t.assigneeName, createdAt: t.createdAt, updatedAt: t.updatedAt,
+      resolvedAt: t.resolvedAt, palliativeReason: t.palliativeReason, palliativePlan: t.palliativePlan,
+      palliativeDeadline: t.palliativeDeadline, attachmentCount: t.attachmentCount
+    }));
+}
+
 function listTickets(user, body) {
-  let list = scopedTickets(user).map(enrichTicket);
+  let list = listTicketQueue(user, body);
   if (body.status) list = list.filter((t) => t.status === body.status);
   if (body.type) list = list.filter((t) => t.type === body.type);
   if (body.q) {
@@ -333,14 +399,20 @@ function listTickets(user, body) {
 }
 
 function getTicket(user, id) {
-  const ticket = enrichTicket(scopedTickets(user).find((t) => t.id === id) || {});
+  return getTicketDetail(user, id);
+}
+
+function getTicketDetail(user, id) {
+  const ticketRows = rows('tickets');
+  const ctx = ticketContext(true);
+  const ticket = enrichTicketWithContext(scopedTicketRows(user, ticketRows).find((t) => t.id === id) || {}, ctx);
   if (!ticket.id) throw new Error('Chamado nao encontrado.');
-  const us = rows('users');
+  const us = ctx.users;
   return {
     ticket,
     attachments: rows('attachments').filter((a) => a.ticketId === id),
-    comments: rows('comments').filter((c) => c.ticketId === id).map((c) => ({ ...c, userName: (us.find((u) => u.id === c.userId) || {}).name || '' })),
-    events: rows('events').filter((e) => e.ticketId === id).map((e) => ({ ...e, userName: (us.find((u) => u.id === e.userId) || {}).name || '' }))
+    comments: rows('comments').filter((c) => c.ticketId === id).map((c) => ({ ...c, userName: (us[c.userId] || {}).name || '' })),
+    events: rows('events').filter((e) => e.ticketId === id).map((e) => ({ ...e, userName: (us[e.userId] || {}).name || '' }))
   };
 }
 
@@ -361,12 +433,13 @@ function updateTicket(user, body) {
     if (reason === 'outros' && !(body.palliativeReasonOther || old.palliativeReasonOther)) throw new Error('Descreva o motivo outros.');
   }
   updateRow('tickets', old._row, {
-    status: body.status || old.status, priority: body.priority || old.priority, assigneeId: body.assigneeId || '',
+    status: body.status || old.status, priority: body.priority || old.priority, assigneeId: body.assigneeId === undefined ? old.assigneeId : body.assigneeId,
     palliativeReason: body.palliativeReason || old.palliativeReason, palliativeReasonOther: body.palliativeReasonOther || old.palliativeReasonOther,
     palliativePlan: body.palliativePlan || old.palliativePlan, palliativeDeadline: body.palliativeDeadline || old.palliativeDeadline,
     updatedAt: now(), resolvedAt: ['resolvido','equipamento_condenado'].includes(nextStatus) ? now() : old.resolvedAt
   });
-  append('events', { id: uuid(), ticketId: old.id, userId: user.id, eventType: 'updated', details: 'Chamado atualizado.', createdAt: now() });
+  const detail = nextStatus === 'resolvido' ? 'Chamado solucionado.' : nextStatus === 'paliativo' ? 'Chamado solucionado de forma paliativa.' : 'Chamado atualizado.';
+  append('events', { id: uuid(), ticketId: old.id, userId: user.id, eventType: 'updated', details: detail, createdAt: now() });
   return { ok: true };
 }
 

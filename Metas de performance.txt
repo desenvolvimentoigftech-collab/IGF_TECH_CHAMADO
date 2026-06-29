@@ -1,0 +1,63 @@
+Metas de performance
+
+Baseline medido em 29/06/2026
+
+1. GET health
+   - Tempo atual medio: 1,8s
+   - Meta boa: ate 1,0s
+   - Aceitavel com cold start Apps Script: ate 2,0s
+
+2. Login
+   - Tempo atual medido: 2,2s
+   - Meta boa: ate 1,5s
+   - Aceitavel com cold start Apps Script: ate 3,0s
+
+3. Listagem de empresas
+   - Tempo atual medio: 2,2s
+   - Meta boa: ate 1,5s
+   - Aceitavel com cold start Apps Script: ate 3,0s
+
+4. Listagem de tipos de falha
+   - Tempo atual medio: 2,1s
+   - Meta boa: ate 1,5s
+   - Aceitavel com cold start Apps Script: ate 3,0s
+
+5. Listagem de usuarios
+   - Tempo atual medio: 2,5s
+   - Meta boa: ate 1,5s
+   - Aceitavel com cold start Apps Script: ate 3,0s
+
+6. Dashboard
+   - Tempo atual medio: 2,5s
+   - Meta boa: ate 2,0s
+   - Aceitavel com cold start Apps Script: ate 4,0s
+   - Observacao: deve carregar apenas ao abrir o painel.
+
+7. Fila/listagem de chamados atual
+   - Endpoint atual: listTickets
+   - Tempo atual medio: 3,3s
+   - Meta boa para a nova fila: ate 1,5s
+   - Aceitavel com cold start Apps Script: ate 3,0s
+   - Observacao: a nova fila deve usar endpoint leve, por exemplo listTicketQueue.
+
+8. Detalhes do chamado atual
+   - Endpoint atual: getTicket
+   - Tempo atual medio: 4,8s
+   - Pior tempo observado: 5,4s
+   - Meta boa para detalhes/atendimento: ate 2,0s
+   - Aceitavel com cold start Apps Script: ate 4,0s
+   - Observacao: detalhes completos devem ser carregados somente sob demanda.
+
+9. Acoes de atendimento
+   - Exemplos: atender chamado, alterar status, salvar solucao, salvar paliativo.
+   - Meta boa: ate 1,5s
+   - Aceitavel com cold start Apps Script: ate 3,0s
+
+Meta geral da proxima etapa
+
+- Fila principal abaixo de 1,5s em media.
+- Detalhes abaixo de 2,0s em media.
+- Nenhuma tela deve carregar historico, comentarios, fotos ou formularios tecnicos antes do usuario pedir.
+- Dashboard nao deve ser carregado junto com a fila.
+- O backend deve evitar leituras repetidas de planilhas dentro da mesma requisicao.
+

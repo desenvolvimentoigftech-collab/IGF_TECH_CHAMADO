@@ -11,3 +11,13 @@ button:disabled{cursor:wait;opacity:.72}.is-busy input,.is-busy select,.is-busy 
 .assignee-note{margin:0;color:var(--brand)}
 .em_atendimento{background:#e2f1ff;color:#175cd3}
 @media(max-width:900px){.ticket-detail-inline{grid-template-columns:1fr}.ticket-summary{grid-template-columns:36px 1fr}}
+.ticket-summary{grid-template-columns:1fr auto;align-items:center}
+.ticket-actions{display:flex;align-items:center;justify-content:flex-end;min-width:170px}
+.ticket-description{margin:0 0 10px;color:#334149;line-height:1.4}
+.attendance-layout{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(320px,.85fr);gap:18px}
+.status-actions{display:grid;gap:10px;margin-top:8px}
+.status-actions h2{margin:0}
+.status-actions details{border:1px solid var(--line);border-radius:6px;background:#fbfcfc;padding:12px}
+.status-actions summary{cursor:pointer;font-weight:700;color:var(--brand)}
+.status-actions form{margin-top:12px}
+@media(max-width:900px){.ticket-summary,.attendance-layout{grid-template-columns:1fr}.ticket-actions{justify-content:flex-start;min-width:0}}

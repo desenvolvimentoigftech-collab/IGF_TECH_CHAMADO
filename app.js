@@ -18,7 +18,7 @@ let companies = [];
 let failureTypes = [];
 let locations = [];
 let selectedTicketId = null;
-let expandedTicketId = null;
+let ticketFormDataLoaded = false;
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
@@ -79,6 +79,7 @@ function showView(id) {
   $$(".nav").forEach((button) => button.classList.toggle("active", button.dataset.view === id));
   if (id === "dashboard") loadDashboard();
   if (id === "tickets") loadTickets();
+  if (id === "newTicket") ensureTicketFormData();
   if (id === "companies") loadCompanies();
   if (id === "failureTypes") loadFailureTypes();
   if (id === "locations") loadLocations();
@@ -98,11 +99,11 @@ function applyRoleUi() {
 async function afterLogin(user, newToken) {
   currentUser = user;
   token = newToken || token;
+  ticketFormDataLoaded = false;
   localStorage.setItem("chamadosToken", token);
   $("#loginView").classList.add("hidden");
   $("#appView").classList.remove("hidden");
   applyRoleUi();
-  await Promise.all([loadCompanies(), loadFailureTypes(), loadLocations(), loadAssignableUsers()]);
   showView(currentUser.role === "solicitante" ? "newTicket" : "dashboard");
 }
 
@@ -164,97 +165,148 @@ function renderLineChart(items) {
 }
 
 async function loadTickets() {
-  const data = await api("listTickets", { q: $("#searchInput").value.trim(), status: $("#statusFilter").value, type: $("#typeFilter").value });
+  const data = await api("listTicketQueue", { q: $("#searchInput").value.trim(), status: $("#statusFilter").value, type: $("#typeFilter").value });
   $("#ticketList").innerHTML = data.tickets.map(ticketCard).join("") || "<p class='muted'>Nenhum chamado encontrado.</p>";
-  if (expandedTicketId && data.tickets.some((ticket) => ticket.id === expandedTicketId)) {
-    await renderTicketDetail(expandedTicketId);
-  }
 }
 
 function ticketCard(ticket) {
-  const isExpanded = expandedTicketId === ticket.id;
-  return `<article class="ticket-card ${isExpanded ? "expanded" : ""}">
+  const canManage = ["admin", "gestor", "tecnico"].includes(currentUser.role);
+  const canClaim = canManage && ticket.status === "aberto" && !ticket.assigneeId;
+  const canContinue = canManage && ["em_atendimento", "paliativo"].includes(ticket.status) && (currentUser.role !== "tecnico" || !ticket.assigneeId || ticket.assigneeId === currentUser.id);
+  const primaryAction = canClaim
+    ? `<button class="primary" type="button" onclick="claimTicket('${ticket.id}')">Atender chamado</button>`
+    : canContinue
+      ? `<button class="primary" type="button" onclick="openAttendance('${ticket.id}')">${ticket.status === "paliativo" ? "Alterar status" : "Continuar atendimento"}</button>`
+      : `<button class="secondary" type="button" onclick="openAttendance('${ticket.id}')">Ver detalhes</button>`;
+  return `<article class="ticket-card">
     <div class="ticket-summary">
-      <button class="expand-btn" type="button" onclick="toggleTicket('${ticket.id}')" aria-label="${isExpanded ? "Recolher" : "Expandir"} chamado">${isExpanded ? "-" : "+"}</button>
       <div>
         <div class="ticket-topline"><span class="badge">${ticket.protocol}</span><span class="badge ${ticket.status}">${labels[ticket.status]}</span><span class="badge ${ticket.priority}">${labels[ticket.priority]}</span></div>
         <h3>${escapeHtml(ticket.title)}</h3>
-        <div class="ticket-meta"><span>Tipo: ${labels[ticket.type]}</span><span>Falha: ${escapeHtml(ticket.failureTypeName || ticket.failureOther || "Nao classificada")}</span><span>Empresa: ${escapeHtml(ticket.companyName || "-")}</span><span>Local: ${escapeHtml(ticket.locationName || "-")}</span><span>${ticket.attachmentCount || 0} evidencia(s)</span>${ticket.assigneeName ? `<span>Atendente: ${escapeHtml(ticket.assigneeName)}</span>` : ""}</div>
+        <p class="ticket-description">${escapeHtml(shortText(ticket.description || ticket.title, 150))}</p>
+        <div class="ticket-meta">${ticketMeta(ticket).join("")}</div>
       </div>
+      <div class="ticket-actions">${primaryAction}</div>
     </div>
-    <div id="ticketDetail-${ticket.id}" class="ticket-detail-inline ${isExpanded ? "" : "hidden"}">${isExpanded ? "<p class='muted'>Carregando detalhes...</p>" : ""}</div>
   </article>`;
 }
 
-async function toggleTicket(id) {
-  if (expandedTicketId === id) {
-    expandedTicketId = null;
-    selectedTicketId = null;
-    await loadTickets();
-    return;
+function ticketMeta(ticket) {
+  const items = [
+    `Aberto em ${formatDate(ticket.createdAt)}`,
+    `Solicitante: ${escapeHtml(ticket.requesterName || "-")}`,
+    `Local: ${escapeHtml(ticket.locationName || "-")}`,
+    `Equipamento: ${escapeHtml(ticket.equipmentName || ticket.serialNumber || "-")}`
+  ];
+  if (ticket.assigneeName) items.push(`Responsavel: ${escapeHtml(ticket.assigneeName)}`);
+  if (ticket.status === "paliativo") {
+    items.push(`Prazo: ${escapeHtml(ticket.palliativeDeadline || "-")}`);
+    if (ticket.palliativePlan) items.push(`Plano: ${escapeHtml(shortText(ticket.palliativePlan, 90))}`);
   }
-  expandedTicketId = id;
-  await loadTickets();
+  if (["resolvido", "equipamento_condenado"].includes(ticket.status)) items.push(`Resolvido em ${formatDate(ticket.resolvedAt)}`);
+  if (ticket.attachmentCount) items.push(`${ticket.attachmentCount} evidencia(s)`);
+  return items.map((item) => `<span>${item}</span>`);
+}
+
+function shortText(value, max) {
+  const text = String(value || "").trim();
+  return text.length > max ? `${text.slice(0, max - 3)}...` : text;
+}
+
+async function openAttendance(id) {
+  selectedTicketId = id;
+  showView("ticketAttendance");
+  $("#attendanceTitle").textContent = "Carregando...";
+  $("#attendanceContent").innerHTML = "<p class='muted'>Carregando detalhes do chamado...</p>";
+  await renderTicketDetail(id);
 }
 
 async function renderTicketDetail(id) {
   selectedTicketId = id;
-  const data = await api("getTicket", { id });
+  const data = await api("getTicketDetail", { id });
   const ticket = data.ticket;
   const canManage = ["admin", "gestor", "tecnico"].includes(currentUser.role);
   const canClaim = canManage && ticket.status === "aberto" && !ticket.assigneeId;
-  const detail = $(`#ticketDetail-${id}`);
+  const detail = $("#attendanceContent");
   if (!detail) return;
+  $("#attendanceTitle").textContent = `${ticket.protocol} - ${ticket.title}`;
   detail.innerHTML = `
-    <section class="facts">
+    <section class="panel facts">
+      <h2>Resumo</h2>
       <div class="fact"><span>Status</span><strong>${labels[ticket.status]}</strong></div>
-      <div class="fact"><span>Tipo</span><strong>${labels[ticket.type]}</strong></div>
-      <div class="fact"><span>Falha</span><strong>${escapeHtml(ticket.failureTypeName || ticket.failureOther || "-")}</strong></div>
-      <div class="fact"><span>Local</span><strong>${escapeHtml(ticket.locationName || "-")}</strong></div>
-      <div class="fact"><span>Serie</span><strong>${escapeHtml(ticket.serialNumber || "-")}</strong></div>
-      <div class="fact"><span>Empresa</span><strong>${escapeHtml(ticket.companyName || "-")}</strong></div>
-      <div class="fact"><span>Tecnico</span><strong>${escapeHtml(ticket.assigneeName || "-")}</strong></div>
+      <div class="fact"><span>Prioridade</span><strong>${labels[ticket.priority]}</strong></div>
+      <div class="fact"><span>Solicitante</span><strong>${escapeHtml(ticket.requesterName || "-")}</strong></div>
+      <div class="fact"><span>Responsavel</span><strong>${escapeHtml(ticket.assigneeName || "-")}</strong></div>
+      <div class="fact"><span>Empresa/local</span><strong>${escapeHtml(ticket.companyName || "-")} / ${escapeHtml(ticket.locationName || "-")}</strong></div>
+      <div class="fact"><span>Equipamento</span><strong>${escapeHtml(ticket.equipmentName || ticket.serialNumber || "-")}</strong></div>
       <div class="fact"><span>Criado em</span><strong>${formatDate(ticket.createdAt)}</strong></div>
-      ${ticket.status === "paliativo" ? `<div class="fact"><span>Motivo</span><strong>${labels[ticket.palliativeReason] || ticket.palliativeReason}</strong></div><div class="fact"><span>Plano</span><strong>${escapeHtml(ticket.palliativePlan || "-")}</strong></div><div class="fact"><span>Prazo</span><strong>${escapeHtml(ticket.palliativeDeadline || "-")}</strong></div>` : ""}
+      ${ticket.status === "paliativo" ? `<div class="fact"><span>Motivo</span><strong>${labels[ticket.palliativeReason] || ticket.palliativeReason}</strong></div><div class="fact"><span>Prazo</span><strong>${escapeHtml(ticket.palliativeDeadline || "-")}</strong></div>` : ""}
+      <h2>Descricao</h2>
       <p>${escapeHtml(ticket.description)}</p>
-      ${canClaim ? `<button id="claimTicketBtn" class="primary" type="button">Atender chamado</button>` : ticket.assigneeName ? `<p class="assignee-note">Em atendimento por <strong>${escapeHtml(ticket.assigneeName)}</strong>.</p>` : ""}
-      ${canManage ? manageHtml(ticket) : ""}
+      ${canClaim ? `<button class="primary" type="button" onclick="claimTicket('${ticket.id}')">Atender chamado</button>` : ""}
+      ${canManage ? attendanceActionsHtml(ticket) : ""}
       ${canManage ? `<form id="commentForm" class="form-grid"><label>Comentario<textarea name="body" rows="3" required></textarea></label><button class="primary" type="submit">Adicionar comentario</button></form>` : ""}
     </section>
-    <aside class="facts">
+    <aside class="panel facts">
       <section class="photos"><h3>Evidencias</h3><div class="photo-grid">${data.attachments.map((a) => `<a href="${a.url}" target="_blank"><img src="${a.url}" alt="${escapeHtml(a.fileName)}"></a>`).join("") || "<p class='muted'>Nenhuma foto anexada.</p>"}</div></section>
       <section class="comments"><h3>Comentarios</h3>${data.comments.map((c) => `<div class="comment"><strong>${escapeHtml(c.userName)}</strong><p>${escapeHtml(c.body)}</p><small>${formatDate(c.createdAt)}</small></div>`).join("") || "<p class='muted'>Sem comentarios.</p>"}</section>
-      <section class="timeline"><h3>Historico</h3>${data.events.map((e) => `<div class="event"><strong>${escapeHtml(e.eventType)}</strong><p>${escapeHtml(e.details)}</p><small>${formatDate(e.createdAt)}</small></div>`).join("")}</section>
+      <section class="timeline"><h3>Historico</h3>${data.events.map((e) => `<div class="event"><strong>${eventLabel(e.eventType)}</strong><p>${escapeHtml(e.details)}</p><small>${formatDate(e.createdAt)}</small></div>`).join("")}</section>
     </aside>`;
-  const claimButton = $("#claimTicketBtn");
-  if (claimButton) claimButton.addEventListener("click", claimTicket);
   const commentForm = $("#commentForm");
   if (commentForm) commentForm.addEventListener("submit", submitComment);
-  const manageForm = $("#manageForm");
-  if (manageForm) manageForm.addEventListener("submit", submitManage);
+  const resolveForm = $("#resolveForm");
+  if (resolveForm) resolveForm.addEventListener("submit", submitResolve);
+  const palliativeForm = $("#palliativeForm");
+  if (palliativeForm) palliativeForm.addEventListener("submit", submitPalliative);
 }
 
-function manageHtml(ticket) {
-  const techOptions = users.filter((u) => u.role === "tecnico" && u.companyId === ticket.companyId).map((u) => `<option value="${u.id}" ${ticket.assigneeId === u.id ? "selected" : ""}>${escapeHtml(u.name)}</option>`).join("");
-  return `<form id="manageForm" class="action-grid">
-    <label>Status<select name="status">${["aberto","em_atendimento","resolvido","paliativo","equipamento_condenado"].map((s) => `<option value="${s}" ${ticket.status === s ? "selected" : ""}>${labels[s]}</option>`).join("")}</select></label>
-    <label>Prioridade<select name="priority">${["baixa","media","alta","critica"].map((p) => `<option value="${p}" ${ticket.priority === p ? "selected" : ""}>${labels[p]}</option>`).join("")}</select></label>
-    <label>Tecnico<select name="assigneeId"><option value="">Nao atribuido</option>${techOptions}</select></label>
-    <label>Motivo paliativo<select name="palliativeReason"><option value="">Selecione</option>${["aguardando_peca","aguardando_parada_maquina","aguardando_ferramenta","aguardando_informacao","causa_raiz_em_observacao","aguardando_acesso","aguardando_aprovacao","risco_operacional_para_intervencao","dependencia_de_terceiro","outros"].map((r) => `<option value="${r}" ${ticket.palliativeReason === r ? "selected" : ""}>${labels[r]}</option>`).join("")}</select></label>
-    <label>Outro motivo<input name="palliativeReasonOther" value="${escapeHtml(ticket.palliativeReasonOther || "")}"></label>
-    <label>Plano<textarea name="palliativePlan" rows="3">${escapeHtml(ticket.palliativePlan || "")}</textarea></label>
-    <label>Prazo<input name="palliativeDeadline" type="date" value="${escapeHtml(ticket.palliativeDeadline || "")}"></label>
-    <button class="primary" type="submit">Atualizar</button>
+function attendanceActionsHtml(ticket) {
+  if (ticket.status === "em_atendimento") {
+    return `<section class="status-actions">
+      <h2>Alterar status</h2>
+      <details><summary>Solucionado</summary>${resolveFormHtml()}</details>
+      <details><summary>Solucionado de forma paliativa</summary>${palliativeFormHtml(ticket)}</details>
+    </section>`;
+  }
+  if (ticket.status === "paliativo") {
+    return `<section class="status-actions">
+      <h2>Alterar status</h2>
+      <details open><summary>Solucionado</summary>${resolveFormHtml()}</details>
+    </section>`;
+  }
+  return "";
+}
+
+function resolveFormHtml() {
+  return `<form id="resolveForm" class="form-grid">
+    <label>Descricao da solucao<textarea name="comment" rows="4" required></textarea></label>
+    <button class="primary" type="submit">Salvar como solucionado</button>
   </form>`;
 }
 
-async function submitManage(event) {
+function palliativeFormHtml(ticket) {
+  return `<form id="palliativeForm" class="form-grid two">
+    <label>Motivo<select name="palliativeReason" required><option value="">Selecione</option>${["aguardando_peca","aguardando_parada_maquina","aguardando_ferramenta","aguardando_informacao","causa_raiz_em_observacao","aguardando_acesso","aguardando_aprovacao","risco_operacional_para_intervencao","dependencia_de_terceiro","outros"].map((r) => `<option value="${r}" ${ticket.palliativeReason === r ? "selected" : ""}>${labels[r]}</option>`).join("")}</select></label>
+    <label>Prazo<input name="palliativeDeadline" type="date" value="${escapeHtml(ticket.palliativeDeadline || "")}" required></label>
+    <label class="wide">Descricao da solucao paliativa<textarea name="palliativePlan" rows="4" required>${escapeHtml(ticket.palliativePlan || "")}</textarea></label>
+    <label class="wide">Outro motivo<input name="palliativeReasonOther" value="${escapeHtml(ticket.palliativeReasonOther || "")}"></label>
+    <button class="primary" type="submit">Salvar solucao paliativa</button>
+  </form>`;
+}
+
+function eventLabel(type) {
+  return ({ created: "Criacao", updated: "Atualizacao", claimed: "Chamado assumido", comment: "Comentario" }[type] || type);
+}
+
+async function submitResolve(event) {
   event.preventDefault();
-  setFormBusy(event.target, true, "Atualizando...");
+  setFormBusy(event.target, true, "Salvando...");
   try {
-    await api("updateTicket", { id: selectedTicketId, ...Object.fromEntries(new FormData(event.target).entries()) });
+    const comment = new FormData(event.target).get("comment");
+    await api("updateTicket", { id: selectedTicketId, status: "resolvido" });
+    if (comment) await api("addComment", { ticketId: selectedTicketId, body: comment });
+    await renderTicketDetail(selectedTicketId);
     await loadTickets();
-    await loadDashboard();
   } catch (error) {
     alert(error.message);
   } finally {
@@ -262,14 +314,25 @@ async function submitManage(event) {
   }
 }
 
-async function claimTicket(event) {
+async function submitPalliative(event) {
   event.preventDefault();
-  event.target.disabled = true;
-  event.target.textContent = "Atendendo...";
+  setFormBusy(event.target, true, "Salvando...");
   try {
-    await api("claimTicket", { id: selectedTicketId });
+    await api("updateTicket", { id: selectedTicketId, status: "paliativo", ...Object.fromEntries(new FormData(event.target).entries()) });
+    await renderTicketDetail(selectedTicketId);
     await loadTickets();
-    await loadDashboard();
+  } catch (error) {
+    alert(error.message);
+  } finally {
+    setFormBusy(event.target, false);
+  }
+}
+
+async function claimTicket(id) {
+  try {
+    await api("claimTicket", { id });
+    await openAttendance(id);
+    await loadTickets();
   } catch (error) {
     alert(error.message);
     await loadTickets();
@@ -295,6 +358,13 @@ async function loadCompanies() {
   renderCompanySelects();
   const list = $("#companyList");
   if (list) list.innerHTML = companies.map((c) => `<article class="user-card"><strong>${escapeHtml(c.name)}</strong><div class="ticket-meta"><span>${escapeHtml(c.document || "-")}</span><span>${escapeHtml(c.contactName || "-")}</span><span>${c.active === "TRUE" || c.active === true ? "Ativa" : "Inativa"}</span></div></article>`).join("") || "<p class='muted'>Nenhuma empresa cadastrada.</p>";
+}
+
+async function ensureTicketFormData() {
+  if (ticketFormDataLoaded) return;
+  await Promise.all([loadCompanies(), loadFailureTypes()]);
+  await loadLocations();
+  ticketFormDataLoaded = true;
 }
 
 function renderCompanySelects() {
@@ -361,6 +431,7 @@ $("#loginForm").addEventListener("submit", async (event) => {
 
 $("#logoutBtn").addEventListener("click", () => {
   token = "";
+  ticketFormDataLoaded = false;
   localStorage.removeItem("chamadosToken");
   $("#appView").classList.add("hidden");
   $("#loginView").classList.remove("hidden");
