@@ -18,6 +18,7 @@ let companies = [];
 let failureTypes = [];
 let locations = [];
 let selectedTicketId = null;
+let expandedTicketId = null;
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
@@ -165,20 +166,46 @@ function renderLineChart(items) {
 async function loadTickets() {
   const data = await api("listTickets", { q: $("#searchInput").value.trim(), status: $("#statusFilter").value, type: $("#typeFilter").value });
   $("#ticketList").innerHTML = data.tickets.map(ticketCard).join("") || "<p class='muted'>Nenhum chamado encontrado.</p>";
+  if (expandedTicketId && data.tickets.some((ticket) => ticket.id === expandedTicketId)) {
+    await renderTicketDetail(expandedTicketId);
+  }
 }
 
 function ticketCard(ticket) {
-  return `<article class="ticket-card"><div><span class="badge">${ticket.protocol}</span><h3>${escapeHtml(ticket.title)}</h3><div class="ticket-meta"><span>${labels[ticket.type]}</span><span>${escapeHtml(ticket.failureTypeName || ticket.failureOther || "Falha nao classificada")}</span><span>${escapeHtml(ticket.companyName || "")}</span><span class="badge ${ticket.priority}">${labels[ticket.priority]}</span><span class="badge ${ticket.status}">${labels[ticket.status]}</span><span>${escapeHtml(ticket.locationName || "")}</span><span>${ticket.attachmentCount || 0} evidencia(s)</span></div></div><button class="primary" type="button" onclick="openTicket('${ticket.id}')">Detalhes</button></article>`;
+  const isExpanded = expandedTicketId === ticket.id;
+  return `<article class="ticket-card ${isExpanded ? "expanded" : ""}">
+    <div class="ticket-summary">
+      <button class="expand-btn" type="button" onclick="toggleTicket('${ticket.id}')" aria-label="${isExpanded ? "Recolher" : "Expandir"} chamado">${isExpanded ? "-" : "+"}</button>
+      <div>
+        <div class="ticket-topline"><span class="badge">${ticket.protocol}</span><span class="badge ${ticket.status}">${labels[ticket.status]}</span><span class="badge ${ticket.priority}">${labels[ticket.priority]}</span></div>
+        <h3>${escapeHtml(ticket.title)}</h3>
+        <div class="ticket-meta"><span>Tipo: ${labels[ticket.type]}</span><span>Falha: ${escapeHtml(ticket.failureTypeName || ticket.failureOther || "Nao classificada")}</span><span>Empresa: ${escapeHtml(ticket.companyName || "-")}</span><span>Local: ${escapeHtml(ticket.locationName || "-")}</span><span>${ticket.attachmentCount || 0} evidencia(s)</span>${ticket.assigneeName ? `<span>Atendente: ${escapeHtml(ticket.assigneeName)}</span>` : ""}</div>
+      </div>
+    </div>
+    <div id="ticketDetail-${ticket.id}" class="ticket-detail-inline ${isExpanded ? "" : "hidden"}">${isExpanded ? "<p class='muted'>Carregando detalhes...</p>" : ""}</div>
+  </article>`;
 }
 
-async function openTicket(id) {
+async function toggleTicket(id) {
+  if (expandedTicketId === id) {
+    expandedTicketId = null;
+    selectedTicketId = null;
+    await loadTickets();
+    return;
+  }
+  expandedTicketId = id;
+  await loadTickets();
+}
+
+async function renderTicketDetail(id) {
   selectedTicketId = id;
   const data = await api("getTicket", { id });
   const ticket = data.ticket;
-  $("#detailProtocol").textContent = ticket.protocol;
-  $("#detailTitle").textContent = ticket.title;
   const canManage = ["admin", "gestor", "tecnico"].includes(currentUser.role);
-  $("#ticketDetail").innerHTML = `
+  const canClaim = canManage && ticket.status === "aberto" && !ticket.assigneeId;
+  const detail = $(`#ticketDetail-${id}`);
+  if (!detail) return;
+  detail.innerHTML = `
     <section class="facts">
       <div class="fact"><span>Status</span><strong>${labels[ticket.status]}</strong></div>
       <div class="fact"><span>Tipo</span><strong>${labels[ticket.type]}</strong></div>
@@ -190,6 +217,7 @@ async function openTicket(id) {
       <div class="fact"><span>Criado em</span><strong>${formatDate(ticket.createdAt)}</strong></div>
       ${ticket.status === "paliativo" ? `<div class="fact"><span>Motivo</span><strong>${labels[ticket.palliativeReason] || ticket.palliativeReason}</strong></div><div class="fact"><span>Plano</span><strong>${escapeHtml(ticket.palliativePlan || "-")}</strong></div><div class="fact"><span>Prazo</span><strong>${escapeHtml(ticket.palliativeDeadline || "-")}</strong></div>` : ""}
       <p>${escapeHtml(ticket.description)}</p>
+      ${canClaim ? `<button id="claimTicketBtn" class="primary" type="button">Atender chamado</button>` : ticket.assigneeName ? `<p class="assignee-note">Em atendimento por <strong>${escapeHtml(ticket.assigneeName)}</strong>.</p>` : ""}
       ${canManage ? manageHtml(ticket) : ""}
       ${canManage ? `<form id="commentForm" class="form-grid"><label>Comentario<textarea name="body" rows="3" required></textarea></label><button class="primary" type="submit">Adicionar comentario</button></form>` : ""}
     </section>
@@ -198,11 +226,12 @@ async function openTicket(id) {
       <section class="comments"><h3>Comentarios</h3>${data.comments.map((c) => `<div class="comment"><strong>${escapeHtml(c.userName)}</strong><p>${escapeHtml(c.body)}</p><small>${formatDate(c.createdAt)}</small></div>`).join("") || "<p class='muted'>Sem comentarios.</p>"}</section>
       <section class="timeline"><h3>Historico</h3>${data.events.map((e) => `<div class="event"><strong>${escapeHtml(e.eventType)}</strong><p>${escapeHtml(e.details)}</p><small>${formatDate(e.createdAt)}</small></div>`).join("")}</section>
     </aside>`;
+  const claimButton = $("#claimTicketBtn");
+  if (claimButton) claimButton.addEventListener("click", claimTicket);
   const commentForm = $("#commentForm");
   if (commentForm) commentForm.addEventListener("submit", submitComment);
   const manageForm = $("#manageForm");
   if (manageForm) manageForm.addEventListener("submit", submitManage);
-  if (!$("#ticketDialog").open) $("#ticketDialog").showModal();
 }
 
 function manageHtml(ticket) {
@@ -224,7 +253,6 @@ async function submitManage(event) {
   setFormBusy(event.target, true, "Atualizando...");
   try {
     await api("updateTicket", { id: selectedTicketId, ...Object.fromEntries(new FormData(event.target).entries()) });
-    await openTicket(selectedTicketId);
     await loadTickets();
     await loadDashboard();
   } catch (error) {
@@ -234,12 +262,26 @@ async function submitManage(event) {
   }
 }
 
+async function claimTicket(event) {
+  event.preventDefault();
+  event.target.disabled = true;
+  event.target.textContent = "Atendendo...";
+  try {
+    await api("claimTicket", { id: selectedTicketId });
+    await loadTickets();
+    await loadDashboard();
+  } catch (error) {
+    alert(error.message);
+    await loadTickets();
+  }
+}
+
 async function submitComment(event) {
   event.preventDefault();
   setFormBusy(event.target, true, "Comentando...");
   try {
     await api("addComment", { ticketId: selectedTicketId, body: new FormData(event.target).get("body") });
-    await openTicket(selectedTicketId);
+    await renderTicketDetail(selectedTicketId);
   } catch (error) {
     alert(error.message);
   } finally {
@@ -326,7 +368,6 @@ $("#logoutBtn").addEventListener("click", () => {
 
 $$(".nav").forEach((button) => button.addEventListener("click", () => showView(button.dataset.view)));
 $$("[data-view-jump]").forEach((button) => button.addEventListener("click", () => showView(button.dataset.viewJump)));
-$("#closeDialog").addEventListener("click", () => $("#ticketDialog").close());
 ["searchInput", "statusFilter", "typeFilter"].forEach((id) => $(`#${id}`).addEventListener("input", loadTickets));
 ["dashboardKind", "reportStart", "reportEnd", "reportBucket"].forEach((id) => $(`#${id}`).addEventListener("input", loadDashboardChart));
 $("#ticketCompanySelect").addEventListener("change", loadLocations);

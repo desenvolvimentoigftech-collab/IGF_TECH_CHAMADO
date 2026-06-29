@@ -59,6 +59,7 @@ function route(body) {
     case 'createTicket': return createTicket(user, body.ticket || {}, body.photos || []);
     case 'listTickets': return { tickets: listTickets(user, body) };
     case 'getTicket': return getTicket(user, body.id);
+    case 'claimTicket': return claimTicket(user, body.id);
     case 'updateTicket': return updateTicket(user, body);
     case 'addComment': return addComment(user, body);
     case 'dashboard': return dashboard(user);
@@ -367,6 +368,31 @@ function updateTicket(user, body) {
   });
   append('events', { id: uuid(), ticketId: old.id, userId: user.id, eventType: 'updated', details: 'Chamado atualizado.', createdAt: now() });
   return { ok: true };
+}
+
+function claimTicket(user, id) {
+  requireRole(user, ['admin','gestor','tecnico']);
+  const lock = LockService.getScriptLock();
+  lock.waitLock(5000);
+  try {
+    const all = rows('tickets');
+    const ticket = all.find((t) => t.id === id);
+    if (!ticket || (user.role !== 'admin' && ticket.companyId !== user.companyId)) throw new Error('Chamado nao encontrado.');
+    if (ticket.assigneeId || ticket.status === 'em_atendimento') {
+      const assigned = rows('users').find((u) => u.id === ticket.assigneeId);
+      throw new Error('Chamado ja esta em atendimento' + (assigned ? ' por ' + assigned.name : '') + '.');
+    }
+    if (ticket.status !== 'aberto') throw new Error('Chamado nao esta disponivel para atendimento.');
+    updateRow('tickets', ticket._row, {
+      status: 'em_atendimento',
+      assigneeId: user.id,
+      updatedAt: now()
+    });
+    append('events', { id: uuid(), ticketId: ticket.id, userId: user.id, eventType: 'claimed', details: 'Chamado assumido por ' + user.name + '.', createdAt: now() });
+    return { ok: true, assigneeId: user.id, assigneeName: user.name, status: 'em_atendimento' };
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function addComment(user, body) {
