@@ -21,3 +21,9 @@ button:disabled{cursor:wait;opacity:.72}.is-busy input,.is-busy select,.is-busy 
 .status-actions summary{cursor:pointer;font-weight:700;color:var(--brand)}
 .status-actions form{margin-top:12px}
 @media(max-width:900px){.ticket-summary,.attendance-layout{grid-template-columns:1fr}.ticket-actions{justify-content:flex-start;min-width:0}}
+.chart-legend,.chart-axis{display:flex;justify-content:space-between;gap:12px;color:var(--muted);font-size:12px}
+.chart-legend{align-items:center;border-bottom:1px solid var(--line);padding-bottom:8px}
+.chart-legend span{display:inline-flex;align-items:center;gap:6px}
+.legend-count{display:inline-block;width:18px;height:8px;border-radius:999px;background:var(--brand)}
+.chart-axis{padding:0 2px}
+.chart-axis-bottom{justify-content:flex-end}

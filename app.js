@@ -144,12 +144,16 @@ async function loadDashboardChart() {
 function renderPareto(items) {
   if (!items.length) return $("#dashboardChart").innerHTML = "<p class='muted'>Sem ocorrencias no periodo.</p>";
   const max = Math.max(...items.map((item) => item.total));
-  let cumulative = 0;
   const total = items.reduce((sum, item) => sum + item.total, 0);
-  $("#dashboardChart").innerHTML = items.map((item) => {
-    cumulative += item.total;
-    return `<div class="bar-row"><div class="bar-label"><span>${escapeHtml(item.label)}</span><strong>${item.total} (${Math.round(cumulative / total * 100)}%)</strong></div><div class="bar-track"><div class="bar-fill" style="width:${Math.max(5, item.total / max * 100)}%"></div></div></div>`;
-  }).join("");
+  $("#dashboardChart").innerHTML = `
+    <div class="chart-legend"><span><i class="legend-count"></i>Quantidade de chamados</span><span>Percentual sobre o total: ${total}</span></div>
+    <div class="chart-axis"><span>0%</span><span>50%</span><span>100%</span></div>
+    ${items.map((item) => {
+      const percent = Math.round(item.total / total * 100);
+      return `<div class="bar-row"><div class="bar-label"><span>${escapeHtml(item.label)}</span><strong>${item.total} (${percent}%)</strong></div><div class="bar-track"><div class="bar-fill" style="width:${Math.max(5, item.total / max * 100)}%"></div></div></div>`;
+    }).join("")}
+    <div class="chart-axis chart-axis-bottom"><span>Menor volume</span><span>Maior volume</span></div>
+  `;
 }
 
 function renderLineChart(items) {
