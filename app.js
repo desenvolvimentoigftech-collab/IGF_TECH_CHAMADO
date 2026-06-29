@@ -196,7 +196,7 @@ function ticketMeta(ticket) {
     `Aberto em ${formatDate(ticket.createdAt)}`,
     `Solicitante: ${escapeHtml(ticket.requesterName || "-")}`,
     `Local: ${escapeHtml(ticket.locationName || "-")}`,
-    `Equipamento: ${escapeHtml(ticket.equipmentName || ticket.serialNumber || "-")}`
+    `Equipamento: ${escapeHtml(equipmentLabel(ticket))}`
   ];
   if (ticket.assigneeName) items.push(`Responsavel: ${escapeHtml(ticket.assigneeName)}`);
   if (ticket.status === "paliativo") {
@@ -211,6 +211,10 @@ function ticketMeta(ticket) {
 function shortText(value, max) {
   const text = String(value || "").trim();
   return text.length > max ? `${text.slice(0, max - 3)}...` : text;
+}
+
+function equipmentLabel(ticket) {
+  return `${ticket.equipmentName || "-"} - Serie: ${ticket.serialNumber || "-"}`;
 }
 
 async function openAttendance(id) {
@@ -238,7 +242,7 @@ async function renderTicketDetail(id) {
       <div class="fact"><span>Solicitante</span><strong>${escapeHtml(ticket.requesterName || "-")}</strong></div>
       <div class="fact"><span>Responsavel</span><strong>${escapeHtml(ticket.assigneeName || "-")}</strong></div>
       <div class="fact"><span>Empresa/local</span><strong>${escapeHtml(ticket.companyName || "-")} / ${escapeHtml(ticket.locationName || "-")}</strong></div>
-      <div class="fact"><span>Equipamento</span><strong>${escapeHtml(ticket.equipmentName || ticket.serialNumber || "-")}</strong></div>
+      <div class="fact"><span>Equipamento</span><strong>${escapeHtml(equipmentLabel(ticket))}</strong></div>
       <div class="fact"><span>Criado em</span><strong>${formatDate(ticket.createdAt)}</strong></div>
       ${ticket.status === "paliativo" ? `<div class="fact"><span>Motivo</span><strong>${labels[ticket.palliativeReason] || ticket.palliativeReason}</strong></div><div class="fact"><span>Prazo</span><strong>${escapeHtml(ticket.palliativeDeadline || "-")}</strong></div>` : ""}
       <h2>Descricao</h2>
