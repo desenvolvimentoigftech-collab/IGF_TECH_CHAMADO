@@ -304,7 +304,7 @@ function savePhotos(ticket, user, photos) {
 }
 
 function scopedTickets(user) {
-  if (user.role === 'solicitante') throw new Error('Solicitante pode apenas abrir chamados.');
+  if (user.role === 'solicitante') return rows('tickets').filter((t) => t.requesterId === user.id);
   return rows('tickets').filter((t) => user.role === 'admin' || t.companyId === user.companyId);
 }
 

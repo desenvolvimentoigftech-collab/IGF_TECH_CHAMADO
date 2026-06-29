@@ -90,7 +90,7 @@ function applyRoleUi() {
   $("#currentRole").textContent = currentUser.companyName ? `${labels[currentUser.role]} - ${currentUser.companyName}` : labels[currentUser.role];
   $$(".admin-only").forEach((el) => el.classList.toggle("hidden", currentUser.role !== "admin"));
   $$(".manager-only").forEach((el) => el.classList.toggle("hidden", !["admin", "gestor"].includes(currentUser.role)));
-  $$(".nav[data-view='dashboard'], .nav[data-view='tickets']").forEach((el) => el.classList.toggle("hidden", currentUser.role === "solicitante"));
+  $$(".nav[data-view='dashboard']").forEach((el) => el.classList.toggle("hidden", currentUser.role === "solicitante"));
   $("#ticketCompanySelect").required = currentUser.role === "admin";
   $("#locationCompanySelect").required = currentUser.role === "admin";
 }
